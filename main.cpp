@@ -10,7 +10,7 @@
 
 // 1234567891011131415161718192021
 // 345678910111314151617181920221221
-std::string testStr = "345678910111314151617181920221221";
+std::string testStr;
 bool needAllSolutions = true;
 
 template<typename T>
@@ -21,26 +21,20 @@ auto displayVector(int step, const std::vector<T> &z) -> void {
 }
 
 // shared data
-int N = 80;
+int N = 111;
 int Nmax = 123;
 int absentNumber = 21;
-std::vector<int> digits;
-std::vector<int> countOfNumbersLengthI;
+std::vector<int> numbers1toN;
 std::string fullS;
 
 void init() {
-    digits.resize(N);
+    numbers1toN.resize(N);
     for (int i = 0; i < N; ++i)
-        digits[i] = i + 1;
+        numbers1toN[i] = i + 1;
 
     std::ostringstream full;
-    for (int i: digits) {
+    for (int i: numbers1toN) {
         auto numAsStr = std::to_string(i);
-        std::size_t length = numAsStr.length();
-        if (length >= countOfNumbersLengthI.size()) {
-            countOfNumbersLengthI.resize(length);
-        }
-        ++countOfNumbersLengthI[length - 1];
         full << numAsStr;
     }
     fullS = full.str();
@@ -52,14 +46,14 @@ void prepareTest() {
     std::srand(std::time(nullptr));
     for (int i = N - 1; i > 0; --i) {
         int j = std::rand() % (i + 1);
-        int t = digits[i];
-        digits[i] = digits[j];
-        digits[j] = t;
+        int t = numbers1toN[i];
+        numbers1toN[i] = numbers1toN[j];
+        numbers1toN[j] = t;
     }
 
     std::ostringstream test;
     std::cout << "absentNumber = " << absentNumber << std::endl;
-    for (int i: digits) {
+    for (int i: numbers1toN) {
         if (i != absentNumber) {
             test << i;
         }
@@ -108,17 +102,9 @@ int main() {
         }
     }
 
-    if (digsToCombineLostElement.empty() || digsToCombineLostElement.size() > countOfNumbersLengthI.size()) {
+    if (digsToCombineLostElement.empty()) {
         std::cout << "No solution" << std::endl;
         return 1;
-    }
-    --countOfNumbersLengthI[digsToCombineLostElement.size() - 1];
-
-    std::vector<int> orderedRelatedOffsetsToCutInputString;
-    for (int i = 0; i < countOfNumbersLengthI.size(); ++i) {
-        for (int k = 0; k < countOfNumbersLengthI[i]; ++k) {
-            orderedRelatedOffsetsToCutInputString.push_back(i + 1);
-        }
     }
 
     std::vector<int> permutationsFromAvailableDigits;

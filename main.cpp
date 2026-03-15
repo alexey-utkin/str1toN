@@ -3,10 +3,10 @@
 #include <iostream>
 #include <vector>
 #include <ctime>
-#include <format>
 #include <sstream>
-#include <unordered_set>
-#include <bitset>
+#include <map>
+#include <set>
+#include <functional>
 
 // 1234567891011131415161718192021
 // 345678910111314151617181920221221
@@ -20,8 +20,8 @@ auto displayVector(int step, const std::vector<T> &z) -> void {
 }
 
 // shared data
-int N = 30;
-int Nmax = 45;
+int N = 80;
+int Nmax = 123;
 int absentNumber = 21;
 std::vector<int> digits;
 std::vector<int> countOfNumbersLengthI;
@@ -73,7 +73,7 @@ bool findN() {
     while (N < Nmax) {
         L += std::to_string(N).length();
         if (L > testStr.length()) {
-           return true;
+            return true;
         }
         ++N;
     }
@@ -82,8 +82,8 @@ bool findN() {
 
 int main() {
     if (!testStr.empty()) {
-      if (!findN())
-          return 1;
+        if (!findN())
+            return 1;
     }
     init();
     if (testStr.empty()) {
@@ -120,7 +120,7 @@ int main() {
         }
     }
 
-    std::vector<int> permutationsFromAvailableDigits;
+    std::set<int> permutationsFromAvailableDigits;
     do {
         if (digsToCombineLostElement[0] == 0) continue;
         std::ostringstream ins;
@@ -129,7 +129,7 @@ int main() {
         }
         int valPerm = std::stoi(ins.str());
         if (valPerm <= 0 || valPerm > N) continue;
-        permutationsFromAvailableDigits.push_back(valPerm);
+        permutationsFromAvailableDigits.insert(valPerm);
     } while (std::next_permutation(digsToCombineLostElement.begin(), digsToCombineLostElement.end()));
 
     // Fast check
@@ -159,49 +159,118 @@ int main() {
         return 0;
     }
 
-    do {
-        // check permutations
-        int pos = 0;
-        bool validCut = true;
-        std::vector invalids(N, 0);
-        std::vector permutations = permutationsFromAvailableDigits;
-        for (int numOfDig: orderedRelatedOffsetsToCutInputString) {
-            int val = std::stoi(testStr.substr(pos, numOfDig));
-            if (auto it = std::find(permutations.begin(), permutations.end(), val); it != permutations.end()) {
-                permutations.erase(it);
-                if (permutations.empty()) {
-                    validCut = false;
-                    break;
+    // Memoization tree using Recursive DFS
+    //
+    // EXPLANATION:
+    // Instead of generating all permutations of cut positions (which is O(N!) complexity),
+    // we use a recursive tree search that tries different ways to split the string.
+    //
+    // At each position in the string, we try splitting off 1, 2, or 3 digits,
+    // check if the resulting number is valid (not used, in range 1..N),
+    // and recursively continue from the next position.
+    //
+    // MEMOIZATION: We cache results for each unique state (position + used numbers + remaining candidates)
+    // so if we reach the same state from different paths, we don't recompute.
+    //
+    // STATE:
+    //   - pos: current position in testStr
+    //   - usedNumbers: set of numbers already extracted (to avoid duplicates)
+    //   - remainingCandidates: set of candidate solutions still possible
+    //
+    // BASE CASE: When pos == testStr.length(), we check if exactly one candidate remains
+    //
+
+    // Define the state as a tuple for memoization
+    using State = std::tuple<int, std::set<int>, std::set<int> >;
+    std::map<State, bool> memo;
+    int maxPossibleDigits = std::to_string(N).length();
+
+    // Recursive solve function
+    std::function<bool(
+        int,
+        const std::set<int> &,
+        const std::set<int> &,
+        std::vector<int> &)> solve;
+    solve = [&](
+        int pos,
+        const std::set<int> &usedNumbers,
+        const std::set<int> &remainingCandidates,
+        std::vector<int> &splits) -> bool {
+                // BASE CASE: reached end of string
+                if (pos == testStr.length()) {
+                    if (remainingCandidates.size() == 1) {
+                        // Found solution! Report it
+                        int solution = *remainingCandidates.begin();
+                        std::ostringstream oss;
+                        for (int i = 0; i < N; ++i) {
+                            if (i > 0) oss << ",";
+                            if (usedNumbers.contains(i + 1))
+                                oss << i + 1;
+                        }
+                        std::cout << "Solution: " << solution << std::endl
+                                  << "Check: " << oss.str() << std::endl;
+
+                        // Show how we split the string
+                        int p = 0;
+                        for (int len: splits) {
+                            std::cout << testStr.substr(p, len) << ",";
+                            p += len;
+                        }
+                        std::cout << std::endl;
+                        return true;
+                    }
+                    return false;
                 }
-            }
-            if (val <= 0 || val > N || invalids[val - 1] > 0) {
-                validCut = false;
-                break;
-            }
-            invalids[val - 1] = 1;
-            pos += numOfDig;
-        }
 
-        if (validCut) {
-            // Report the result:
-            std::ostringstream oss;
-            for (size_t i = 0; i < N; ++i) {
-                if (i > 0) oss << ",";
-                if (invalids[i])
-                    oss << i + 1;
-            }
-            std::cout << "Solution: " << *permutations.begin() << std::endl << "Check: " << oss.str() << std::endl;
-            pos = 0;
-            for (int numOfDig: orderedRelatedOffsetsToCutInputString) {
-                std::cout << testStr.substr(pos, numOfDig) << ",";
-                pos += numOfDig;
-            }
-            std::cout << std::endl;
-            //return 0;
-        }
-    } while (std::next_permutation(orderedRelatedOffsetsToCutInputString.begin(),
-                                   orderedRelatedOffsetsToCutInputString.end()));
+                // Check memoization cache
+                State currentState = std::make_tuple(pos, usedNumbers, remainingCandidates);
+                if (memo.contains(currentState)) {
+                    return memo[currentState];
+                }
 
-    std::cout << "No solution" << std::endl;
+                // RECURSIVE CASE: Try different split lengths
+                // For N up to 100, numbers can be 1-3 digits
+                // We determine max possible digits based on N
+                int maxDigits = std::min<int>(maxPossibleDigits, testStr.length() - pos);
+
+                for (int len = 1; len <= maxDigits; ++len) {
+                    std::string substr = testStr.substr(pos, len);
+                    int val = std::stoi(substr);
+
+                    // Validate the extracted number
+                    if (val <= 0 || val > N) continue; // out of range
+                    if (usedNumbers.count(val)) continue; // already used (duplicate)
+
+                    // Update state for next recursion
+                    std::set<int> newUsed = usedNumbers;
+                    newUsed.insert(val);
+
+                    std::set<int> newRemaining = remainingCandidates;
+                    newRemaining.erase(val); // if val was a candidate, it's no longer the missing number
+
+                    if (newRemaining.empty()) continue; // all candidates eliminated, dead end
+
+                    // Recurse
+                    splits.push_back(len);
+                    if (solve(pos + len, newUsed, newRemaining, splits)) {
+                        memo[currentState] = true;
+                        return true;
+                    }
+                    splits.pop_back(); // backtrack
+                }
+
+                // No valid split found from this state
+                memo[currentState] = false;
+                return false;
+            };
+
+    // Initialize and start search
+    std::set<int> initialUsed;
+    std::vector<int> splits;
+
+    if (!solve(0, initialUsed, permutationsFromAvailableDigits, splits)) {
+        std::cout << "No solution" << std::endl;
+    }
+
     return 0;
 }

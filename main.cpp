@@ -5,10 +5,12 @@
 #include <ctime>
 #include <format>
 #include <sstream>
+#include <unordered_set>
+#include <bitset>
 
 // 1234567891011131415161718192021
 // 345678910111314151617181920221221
-std::string testStr = "345678910111314151617181920221221";
+std::string testStr;
 
 template<typename T>
 auto displayVector(int step, const std::vector<T> &z) -> void {
@@ -61,6 +63,7 @@ void prepareTest() {
             test << i;
         }
     }
+    testStr = test.str();
     std::cout << "String without element:\n" << testStr << std::endl;
 }
 
@@ -157,7 +160,7 @@ int main() {
     }
 
     do {
-        // check permutations of cuts
+        // check permutations
         int pos = 0;
         bool validCut = true;
         std::vector invalids(N, 0);

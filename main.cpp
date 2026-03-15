@@ -120,7 +120,7 @@ int main() {
         }
     }
 
-    std::set<int> permutationsFromAvailableDigits;
+    std::vector<int> permutationsFromAvailableDigits;
     do {
         if (digsToCombineLostElement[0] == 0) continue;
         std::ostringstream ins;
@@ -129,7 +129,7 @@ int main() {
         }
         int valPerm = std::stoi(ins.str());
         if (valPerm <= 0 || valPerm > N) continue;
-        permutationsFromAvailableDigits.insert(valPerm);
+        permutationsFromAvailableDigits.push_back(valPerm);
     } while (std::next_permutation(digsToCombineLostElement.begin(), digsToCombineLostElement.end()));
 
     // Fast check
@@ -266,9 +266,10 @@ int main() {
 
     // Initialize and start search
     std::set<int> initialUsed;
+    std::set<int> permutationsFromAvailableDigitsSet(permutationsFromAvailableDigits.begin(), permutationsFromAvailableDigits.end());
     std::vector<int> splits;
 
-    if (!solve(0, initialUsed, permutationsFromAvailableDigits, splits)) {
+    if (!solve(0, initialUsed, permutationsFromAvailableDigitsSet, splits)) {
         std::cout << "No solution" << std::endl;
     }
 

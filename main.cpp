@@ -10,7 +10,8 @@
 
 // 1234567891011131415161718192021
 // 345678910111314151617181920221221
-std::string testStr;
+std::string testStr = "345678910111314151617181920221221";
+bool needAllSolutions = true;
 
 template<typename T>
 auto displayVector(int step, const std::vector<T> &z) -> void {
@@ -190,87 +191,93 @@ int main() {
         int,
         const std::set<int> &,
         const std::set<int> &,
-        std::vector<int> &)> solve;
-    solve = [&](
+        std::vector<int> &)> solve = [&](
         int pos,
         const std::set<int> &usedNumbers,
         const std::set<int> &remainingCandidates,
-        std::vector<int> &splits) -> bool {
-                // BASE CASE: reached end of string
-                if (pos == testStr.length()) {
-                    if (remainingCandidates.size() == 1) {
-                        // Found solution! Report it
-                        int solution = *remainingCandidates.begin();
-                        std::ostringstream oss;
-                        for (int i = 0; i < N; ++i) {
-                            if (i > 0) oss << ",";
-                            if (usedNumbers.contains(i + 1))
-                                oss << i + 1;
-                        }
-                        std::cout << "Solution: " << solution << std::endl
-                                  << "Check: " << oss.str() << std::endl;
-
-                        // Show how we split the string
-                        int p = 0;
-                        for (int len: splits) {
-                            std::cout << testStr.substr(p, len) << ",";
-                            p += len;
-                        }
-                        std::cout << std::endl;
-                        return true;
-                    }
-                    return false;
+        std::vector<int> &splits) -> bool
+    {
+        // BASE CASE: reached end of string
+        if (pos == testStr.length()) {
+            if (remainingCandidates.size() == 1) {
+                // Found solution! Report it
+                int solution = *remainingCandidates.begin();
+                std::ostringstream oss;
+                for (int i = 0; i < N; ++i) {
+                    if (i > 0) oss << ",";
+                    if (usedNumbers.contains(i + 1))
+                        oss << i + 1;
                 }
+                std::cout << "Solution: " << solution << std::endl
+                        << "Check: " << oss.str() << std::endl;
 
-                // Check memoization cache
-                State currentState = std::make_tuple(pos, usedNumbers, remainingCandidates);
-                if (memo.contains(currentState)) {
-                    return memo[currentState];
+                // Show how we split the string
+                int p = 0;
+                for (int len: splits) {
+                    std::cout << testStr.substr(p, len) << ",";
+                    p += len;
                 }
+                std::cout << std::endl;
+                return true;
+            }
+            return false;
+        }
 
-                // RECURSIVE CASE: Try different split lengths
-                // For N up to 100, numbers can be 1-3 digits
-                // We determine max possible digits based on N
-                int maxDigits = std::min<int>(maxPossibleDigits, testStr.length() - pos);
+        // Check memoization cache
+        State currentState = std::make_tuple(pos, usedNumbers, remainingCandidates);
+        if (memo.contains(currentState)) {
+            return memo[currentState];
+        }
 
-                for (int len = 1; len <= maxDigits; ++len) {
-                    std::string substr = testStr.substr(pos, len);
-                    int val = std::stoi(substr);
+        // RECURSIVE CASE: Try different split lengths
+        // For N up to 100, numbers can be 1-3 digits
+        // We determine max possible digits based on N
+        int maxDigits = std::min<int>(maxPossibleDigits, testStr.length() - pos);
 
-                    // Validate the extracted number
-                    if (val <= 0 || val > N) continue; // out of range
-                    if (usedNumbers.count(val)) continue; // already used (duplicate)
+        for (int len = 1; len <= maxDigits; ++len) {
+            std::string substr = testStr.substr(pos, len);
+            int val = std::stoi(substr);
 
-                    // Update state for next recursion
-                    std::set<int> newUsed = usedNumbers;
-                    newUsed.insert(val);
+            // Validate the extracted number
+            if (val <= 0 || val > N)
+                continue; // out of range
 
-                    std::set<int> newRemaining = remainingCandidates;
-                    newRemaining.erase(val); // if val was a candidate, it's no longer the missing number
+            if (usedNumbers.contains(val))
+                continue; // already used (duplicate)
 
-                    if (newRemaining.empty()) continue; // all candidates eliminated, dead end
+            // Update state for next recursion
+            std::set<int> newUsed = usedNumbers;
+            newUsed.insert(val);
 
-                    // Recurse
-                    splits.push_back(len);
-                    if (solve(pos + len, newUsed, newRemaining, splits)) {
-                        memo[currentState] = true;
-                        return true;
-                    }
-                    splits.pop_back(); // backtrack
-                }
+            std::set<int> newRemaining = remainingCandidates;
+            newRemaining.erase(val); // if val was a candidate, it's no longer the missing number
 
-                // No valid split found from this state
-                memo[currentState] = false;
-                return false;
-            };
+            if (newRemaining.empty())
+                continue; // all candidates eliminated, dead end
+
+            // Recurse
+            splits.push_back(len);
+            if (solve(pos + len, newUsed, newRemaining, splits)) {
+                memo[currentState] = true;
+                if (!needAllSolutions)
+                  return true;
+            }
+            splits.pop_back(); // backtrack
+        }
+
+        // No valid split found from this state
+        memo[currentState] = false;
+        return false;
+    };
 
     // Initialize and start search
     std::set<int> initialUsed;
-    std::set<int> permutationsFromAvailableDigitsSet(permutationsFromAvailableDigits.begin(), permutationsFromAvailableDigits.end());
+    std::set<int> permutationsFromAvailableDigitsSet(permutationsFromAvailableDigits.begin(),
+                                                     permutationsFromAvailableDigits.end());
     std::vector<int> splits;
 
     if (!solve(0, initialUsed, permutationsFromAvailableDigitsSet, splits)) {
-        std::cout << "No solution" << std::endl;
+        std::cout << "No solution?" << std::endl;
     }
 
     return 0;

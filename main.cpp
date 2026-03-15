@@ -1,9 +1,14 @@
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <vector>
 #include <ctime>
 #include <format>
 #include <sstream>
+
+// 1234567891011131415161718192021
+// 345678910111314151617181920221221
+std::string testStr = "345678910111314151617181920221221";
 
 template<typename T>
 auto displayVector(int step, const std::vector<T> &z) -> void {
@@ -12,27 +17,19 @@ auto displayVector(int step, const std::vector<T> &z) -> void {
         std::cout << i << "->" << z[i] << std::endl;
 }
 
-int main() {
-    int N = 30;
-    int absentNumber = 21;
-    // 2615913192237251118245121208146416232281017302927
-    // 12 21 - ok
-    std::vector<int> digits(N);
+// shared data
+int N = 30;
+int Nmax = 45;
+int absentNumber = 21;
+std::vector<int> digits;
+std::vector<int> countOfNumbersLengthI;
+std::string fullS;
 
-    // init
-    for (int i = 0; i < digits.size(); ++i)
+void init() {
+    digits.resize(N);
+    for (int i = 0; i < N; ++i)
         digits[i] = i + 1;
 
-    // Shuffle
-    std::srand(std::time(nullptr));
-    for (int i = digits.size() - 1; i > 0; --i) {
-        int j = std::rand() % (i + 1);
-        int t = digits[i];
-        digits[i] = digits[j];
-        digits[j] = t;
-    }
-
-    std::vector<int> countOfNumbersLengthI;
     std::ostringstream full;
     for (int i: digits) {
         auto numAsStr = std::to_string(i);
@@ -43,44 +40,75 @@ int main() {
         ++countOfNumbersLengthI[length - 1];
         full << numAsStr;
     }
-    std::string fullS = full.str();
+    fullS = full.str();
     std::cout << "String with element:\n" << fullS << std::endl;
+}
 
-    std::ostringstream mstr;
+void prepareTest() {
+    // Shuffle
+    std::srand(std::time(nullptr));
+    for (int i = N - 1; i > 0; --i) {
+        int j = std::rand() % (i + 1);
+        int t = digits[i];
+        digits[i] = digits[j];
+        digits[j] = t;
+    }
+
+    std::ostringstream test;
     std::cout << "absentNumber = " << absentNumber << std::endl;
     for (int i: digits) {
         if (i != absentNumber) {
-            mstr << i;
+            test << i;
         }
     }
-    std::string mstrS = /*mstr.str()*/ "2615913192237251118245121208146416232281017302927";
-    std::cout << "String without element:\n" << mstrS << std::endl;
+    std::cout << "String without element:\n" << testStr << std::endl;
+}
 
-    std::vector<int> z(10);
+bool findN() {
+    N = 1;
+    int L = 0;
+    while (N < Nmax) {
+        L += std::to_string(N).length();
+        if (L > testStr.length()) {
+           return true;
+        }
+        ++N;
+    }
+    return false;
+}
+
+int main() {
+    if (!testStr.empty()) {
+      if (!findN())
+          return 1;
+    }
+    init();
+    if (testStr.empty()) {
+        prepareTest();
+    }
+
+    std::vector<int> countAbsentDigsInStr(10);
     for (int i = 0; i < fullS.length(); ++i) {
         int k = fullS[i] - '0';
-        ++z[k];
+        ++countAbsentDigsInStr[k];
     }
-    for (int i = 0; i < mstrS.length(); ++i) {
-        int k = mstrS[i] - '0';
-        --z[k];
+    for (int i = 0; i < testStr.length(); ++i) {
+        int k = testStr[i] - '0';
+        --countAbsentDigsInStr[k];
     }
-    //displayVector(2, z);
 
     std::vector<int> digsToCombineLostElement;
-    for (int i = 0; i < z.size(); ++i) {
-        for (int k = 0; k < z[i]; ++k) {
+    for (int i = 0; i < countAbsentDigsInStr.size(); ++i) {
+        for (int k = 0; k < countAbsentDigsInStr[i]; ++k) {
             digsToCombineLostElement.push_back(i);
         }
     }
-    //displayVector(11, digsToCombineLostElement);
 
     if (digsToCombineLostElement.empty() || digsToCombineLostElement.size() > countOfNumbersLengthI.size()) {
         std::cout << "No solution" << std::endl;
         return 1;
     }
     --countOfNumbersLengthI[digsToCombineLostElement.size() - 1];
-    //displayVector(13, countOfNumbersLengthI);
 
     std::vector<int> orderedRelatedOffsetsToCutInputString;
     for (int i = 0; i < countOfNumbersLengthI.size(); ++i) {
@@ -113,7 +141,7 @@ int main() {
     int directInclusion = 0;
     int solutionIndex = -1;
     for (int i = 0; i < permutationsFromAvailableDigits.size(); ++i) {
-        if (mstrS.find(std::to_string(permutationsFromAvailableDigits[i])) != std::string::npos) {
+        if (testStr.find(std::to_string(permutationsFromAvailableDigits[i])) != std::string::npos) {
             ++directInclusion;
         } else {
             solutionIndex = i;
@@ -123,20 +151,19 @@ int main() {
         std::cout << "Fast Solution #2:" << permutationsFromAvailableDigits[solutionIndex] << std::endl;
         return 0;
     }
-    if (N > 45) {
+    if (N > Nmax) {
         std::cout << "Too complicated !!!" << std::endl;
         return 0;
     }
-
 
     do {
         // check permutations of cuts
         int pos = 0;
         bool validCut = true;
-        std::vector invalids(digits.size(), 0);
+        std::vector invalids(N, 0);
         std::vector permutations = permutationsFromAvailableDigits;
         for (int numOfDig: orderedRelatedOffsetsToCutInputString) {
-            int val = std::stoi(mstrS.substr(pos, numOfDig));
+            int val = std::stoi(testStr.substr(pos, numOfDig));
             if (auto it = std::find(permutations.begin(), permutations.end(), val); it != permutations.end()) {
                 permutations.erase(it);
                 if (permutations.empty()) {
@@ -155,7 +182,7 @@ int main() {
         if (validCut) {
             // Report the result:
             std::ostringstream oss;
-            for (size_t i = 0; i < digits.size(); ++i) {
+            for (size_t i = 0; i < N; ++i) {
                 if (i > 0) oss << ",";
                 if (invalids[i])
                     oss << i + 1;
@@ -163,7 +190,7 @@ int main() {
             std::cout << "Solution: " << *permutations.begin() << std::endl << "Check: " << oss.str() << std::endl;
             pos = 0;
             for (int numOfDig: orderedRelatedOffsetsToCutInputString) {
-                std::cout << mstrS.substr(pos, numOfDig) << ",";
+                std::cout << testStr.substr(pos, numOfDig) << ",";
                 pos += numOfDig;
             }
             std::cout << std::endl;

@@ -10,7 +10,9 @@
 
 // 1234567891011131415161718192021
 // 345678910111314151617181920221221
+// 123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899100101102103104105106107108109110111112
 std::string testStr;
+// = "215118776150704414374672273928623127583062110985807698749010652260104536883409542254520487399791169318259361396849296655759989781932176747281094108384100638852271022465938111642665456334810311011243347138791053569101571541107";
 bool needAllSolutions = true;
 
 template<typename T>
@@ -21,9 +23,9 @@ auto displayVector(int step, const std::vector<T> &z) -> void {
 }
 
 // shared data
-int N = 111;
-int Nmax = 123;
-int absentNumber = 21;
+int N = 130;
+int Nmax = N + 1;
+int absentNumber = 23;
 std::vector<int> numbers1toN;
 std::string fullS;
 
@@ -38,7 +40,7 @@ void init() {
         full << numAsStr;
     }
     fullS = full.str();
-    std::cout << "String with element:\n" << fullS << std::endl;
+    std::cout << N << ": String with element:\n" << fullS << std::endl;
 }
 
 void prepareTest() {
@@ -59,7 +61,7 @@ void prepareTest() {
         }
     }
     testStr = test.str();
-    std::cout << "String without element:\n" << testStr << std::endl;
+    std::cout << N << ": String without element:\n" << testStr << std::endl;
 }
 
 bool findN() {
@@ -75,7 +77,7 @@ bool findN() {
     return false;
 }
 
-int main() {
+int mainDFS() {
     if (!testStr.empty()) {
         if (!findN())
             return 1;
@@ -246,7 +248,7 @@ int main() {
             if (solve(pos + len, newUsed, newRemaining, splits)) {
                 memo[currentState] = true;
                 if (!needAllSolutions)
-                  return true;
+                    return true;
             }
             splits.pop_back(); // backtrack
         }
@@ -267,4 +269,305 @@ int main() {
     }
 
     return 0;
+}
+
+int mainDLX() {
+    if (!testStr.empty()) {
+        if (!findN())
+            return 1;
+    }
+    init();
+    if (testStr.empty()) {
+        prepareTest();
+    }
+
+    std::vector<int> countAbsentDigsInStr(10);
+    for (int i = 0; i < fullS.length(); ++i) {
+        int k = fullS[i] - '0';
+        ++countAbsentDigsInStr[k];
+    }
+    for (int i = 0; i < testStr.length(); ++i) {
+        int k = testStr[i] - '0';
+        --countAbsentDigsInStr[k];
+    }
+
+    std::vector<int> digsToCombineLostElement;
+    for (int i = 0; i < countAbsentDigsInStr.size(); ++i) {
+        for (int k = 0; k < countAbsentDigsInStr[i]; ++k) {
+            digsToCombineLostElement.push_back(i);
+        }
+    }
+
+    if (digsToCombineLostElement.empty()) {
+        std::cout << "No solution" << std::endl;
+        return 1;
+    }
+
+    std::vector<int> permutationsFromAvailableDigits;
+    do {
+        if (digsToCombineLostElement[0] == 0) continue;
+        std::ostringstream ins;
+        for (int n: digsToCombineLostElement) {
+            ins << n;
+        }
+        int valPerm = std::stoi(ins.str());
+        if (valPerm <= 0 || valPerm > N) continue;
+        permutationsFromAvailableDigits.push_back(valPerm);
+    } while (std::next_permutation(digsToCombineLostElement.begin(), digsToCombineLostElement.end()));
+
+    // Fast check
+    if (permutationsFromAvailableDigits.empty()) {
+        std::cout << "Fast no solution" << std::endl;
+        return 1;
+    }
+    if (permutationsFromAvailableDigits.size() == 1) {
+        std::cout << "Fast Solution #1:" << permutationsFromAvailableDigits[0] << std::endl;
+        return 0;
+    }
+    int directInclusion = 0;
+    int solutionIndex = -1;
+    for (int i = 0; i < permutationsFromAvailableDigits.size(); ++i) {
+        if (testStr.find(std::to_string(permutationsFromAvailableDigits[i])) != std::string::npos) {
+            ++directInclusion;
+        } else {
+            solutionIndex = i;
+        }
+    }
+    if (directInclusion == permutationsFromAvailableDigits.size() - 1) {
+        std::cout << "Fast Solution #2:" << permutationsFromAvailableDigits[solutionIndex] << std::endl;
+        return 0;
+    }
+    if (N > Nmax) {
+        std::cout << "Too complicated !!!" << std::endl;
+        return 0;
+    }
+
+    // Dancing Links (DLX) approach
+    //
+    // EXPLANATION:
+    // We model this as an exact cover problem:
+    // - Columns: Each position in testStr must be covered exactly once
+    // - Rows: Each possible way to extract a number (position + length + value)
+    //
+    // Dancing Links is Knuth's Algorithm X implementation that uses doubly-linked
+    // circular lists to efficiently cover/uncover columns during backtracking.
+    //
+    // STRUCTURE:
+    //   - Each node represents a "1" in the sparse matrix
+    //   - Nodes link Left/Right within a row, Up/Down within a column
+    //   - Column headers track the count of nodes in each column
+    //   - We can "cover" and "uncover" columns in O(1) time per link
+    //
+
+    // Build the DLX structure
+    // Dancing Links (DLX) approach structures
+    struct DLXNode {
+        DLXNode *left = nullptr;
+        DLXNode *right = nullptr;
+        DLXNode *up = nullptr;
+        DLXNode *down = nullptr;
+        DLXNode *column = nullptr;
+        int rowId = 0; // which number extraction this represents
+        int value = 0; // the actual number value extracted
+        int pos = 0; // starting position in testStr
+        int len = 0; // length of extraction
+        int size = 0; // for column headers: count of nodes in column
+    };
+
+    struct Extraction {
+        int pos, len, value;
+    };
+
+    int strLen = testStr.length();
+    int maxPossibleDigits = std::to_string(N).length();
+
+    // Create column headers (one per position in testStr)
+    DLXNode *header = new DLXNode();
+    header->left = header->right = header->up = header->down = header;
+    header->column = header;
+    header->size = 0;
+
+    std::vector<DLXNode *> colHeaders(strLen);
+    DLXNode *prev = header;
+    for (int i = 0; i < strLen; ++i) {
+        DLXNode *col = new DLXNode();
+        col->size = 0;
+        col->up = col->down = col->column = col;
+        col->left = prev;
+        col->right = header;
+        prev->right = col;
+        header->left = col;
+        colHeaders[i] = col;
+        prev = col;
+    }
+
+    // Generate all possible extractions and build rows
+    std::vector<Extraction> extractions;
+    std::map<int, std::vector<DLXNode *> > rowNodes; // rowId -> nodes in that row
+
+    int rowId = 0;
+    for (int pos = 0; pos < strLen; ++pos) {
+        int maxDigits = std::min<int>(maxPossibleDigits, strLen - pos);
+        for (int len = 1; len <= maxDigits; ++len) {
+            std::string substr = testStr.substr(pos, len);
+            int val = std::stoi(substr);
+
+            if (val <= 0 || val > N) continue;
+
+            extractions.push_back({pos, len, val});
+
+            // Create nodes for positions [pos, pos+len)
+            std::vector<DLXNode *> rowNodeList;
+            for (int p = pos; p < pos + len; ++p) {
+                DLXNode *node = new DLXNode();
+                node->rowId = rowId;
+                node->value = val;
+                node->pos = pos;
+                node->len = len;
+                node->column = colHeaders[p];
+
+                // Insert into column
+                node->down = colHeaders[p];
+                node->up = colHeaders[p]->up;
+                colHeaders[p]->up->down = node;
+                colHeaders[p]->up = node;
+                colHeaders[p]->size++;
+
+                rowNodeList.push_back(node);
+            }
+
+            // Link row nodes horizontally
+            for (size_t i = 0; i < rowNodeList.size(); ++i) {
+                rowNodeList[i]->right = rowNodeList[(i + 1) % rowNodeList.size()];
+                rowNodeList[i]->left = rowNodeList[(i + rowNodeList.size() - 1) % rowNodeList.size()];
+            }
+
+            rowNodes[rowId] = rowNodeList;
+            rowId++;
+        }
+    }
+
+    // Cover/Uncover operations
+    auto cover = [](DLXNode *col) {
+        col->right->left = col->left;
+        col->left->right = col->right;
+        for (DLXNode *row = col->down; row != col; row = row->down) {
+            for (DLXNode *node = row->right; node != row; node = node->right) {
+                node->down->up = node->up;
+                node->up->down = node->down;
+                node->column->size--;
+            }
+        }
+    };
+
+    auto uncover = [](DLXNode *col) {
+        for (DLXNode *row = col->up; row != col; row = row->up) {
+            for (DLXNode *node = row->left; node != row; node = node->left) {
+                node->column->size++;
+                node->down->up = node;
+                node->up->down = node;
+            }
+        }
+        col->right->left = col;
+        col->left->right = col;
+    };
+
+    // Solution tracking
+    std::vector<int> solution;
+    std::set<int> usedNumbers;
+    bool foundSolution = false;
+
+    // Recursive solve function
+    std::function<bool()> solve = [&]() -> bool {
+        if (header->right == header) {
+            // All columns covered - check if we have exactly one candidate remaining
+            std::set<int> permutationsSet(permutationsFromAvailableDigits.begin(),
+                                          permutationsFromAvailableDigits.end());
+            for (int num: usedNumbers) {
+                permutationsSet.erase(num);
+            }
+
+            if (permutationsSet.size() == 1) {
+                int missing = *permutationsSet.begin();
+                std::ostringstream oss;
+                for (int i = 0; i < N; ++i) {
+                    if (i > 0) oss << ",";
+                    if (usedNumbers.contains(i + 1))
+                        oss << i + 1;
+                }
+                std::cout << "Solution: " << missing << std::endl
+                        << "Check: " << oss.str() << std::endl;
+
+                // Show extractions
+                for (int rid: solution) {
+                    const auto &ext = extractions[rid];
+                    std::cout << testStr.substr(ext.pos, ext.len) << ",";
+                }
+                std::cout << std::endl;
+                return true;
+            }
+            return false;
+        }
+
+        // Choose column with minimum size (heuristic)
+        DLXNode *col = nullptr;
+        int minSize = INT_MAX;
+        for (DLXNode *c = header->right; c != header; c = c->right) {
+            if (c->size < minSize) {
+                minSize = c->size;
+                col = c;
+            }
+        }
+
+        if (col->size == 0) return false; // No way to cover this column
+
+        cover(col);
+
+        for (DLXNode *row = col->down; row != col; row = row->down) {
+            solution.push_back(row->rowId);
+
+            // Check if this value is already used
+            if (usedNumbers.contains(row->value)) {
+                solution.pop_back();
+                continue;
+            }
+
+            usedNumbers.insert(row->value);
+
+            // Cover all columns in this row
+            for (DLXNode *node = row->right; node != row; node = node->right) {
+                cover(node->column);
+            }
+
+            if (solve()) {
+                if (!needAllSolutions) {
+                    uncover(col);
+                    return true;
+                }
+                foundSolution = true;
+            }
+
+            // Uncover all columns in this row
+            for (DLXNode *node = row->left; node != row; node = node->left) {
+                uncover(node->column);
+            }
+
+            usedNumbers.erase(row->value);
+            solution.pop_back();
+        }
+
+        uncover(col);
+        return false;
+    };
+
+    if (!solve() && !foundSolution) {
+        std::cout << "No solution?" << std::endl;
+    }
+
+    return 0;
+}
+
+int main() {
+    //return mainDFS();
+    return mainDLX();
 }
